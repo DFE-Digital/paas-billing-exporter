@@ -1,0 +1,58 @@
+[
+    {
+        "space_name": "space0",
+        "resource_type": "app",
+        "price": {
+            "details": [
+                {
+                    "name": "platform",
+                    "inc_vat": "0.011000000000000000000000000000000000000000000000"
+                },
+                {
+                    "name": "instance",
+                    "inc_vat": "0.022000000000000000000000000000000000000000000000"
+                }
+            ]
+        }
+    },
+    {
+        "space_name": "space0",
+        "resource_type": "service",
+        "price": {
+            "details": [
+                {
+                    "name": "instance",
+                    "inc_vat": "0.033000000000000000000000000000000000000000000000"
+                }
+            ]
+        }
+    },
+    {
+        "space_name": "space1",
+        "resource_type": "app",
+        "price": {
+            "details": [
+                {
+                    "name": "platform",
+                    "inc_vat": "0.044000000000000000000000000000000000000000000000"
+                },
+                {
+                    "name": "instance",
+                    "inc_vat": "0.055000000000000000000000000000000000000000000000"
+                }
+            ]
+        }
+    },
+    {
+        "space_name": "space1",
+        "resource_type": "service",
+        "price": {
+            "details": [
+                {
+                    "name": "instance",
+                    "inc_vat": "0.066000000000000000000000000000000000000000000000"
+                }
+            ]
+        }
+    }
+]
