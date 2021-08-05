@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'billing'
+require 'rack/test'
 
 FAKE_TOKEN = 'bearer eyJhbGciOiJSUzI.eyJqdGkiOiI3Z.SxafJ3STKA2CwOGy50Cwab7wd-twXU'
 
@@ -17,49 +18,60 @@ def mock_api_response
     .to_return(body: billing_api_response)
 end
 
+RSpec.shared_examples 'successful billing API response' do
+  it 'the request is successful' do
+    expect(metrics_response.status).to eq 200
+  end
+
+  it 'the cost metrics are available' do
+    expect(metrics_response.body).to include(cost_metrics_values)
+  end
+end
+
 RSpec.describe BillingCalculator do
   after do
-    # The prometheus registry is a global object in the ruby process
-    # It is not recreated for each test so the cost metric must be unregistered
-    # after each test
-    Prometheus::Client.registry.unregister(:cost)
+    # The prometheus registry is a global object in the ruby process. It is not recreated for each test
+    # so the metrics must be unregistered after each test
+    Prometheus::Client.registry.metrics.each do |m|
+      Prometheus::Client.registry.unregister(m.name)
+    end
   end
+
+  include Rack::Test::Methods
 
   context 'when the billing API returns data' do
-    let(:token) { FAKE_TOKEN }
+    let(:app) { Rack::Builder.parse_file('config.ru').first }
+    let(:metrics_response) { get '/metrics' }
     let(:cost_metrics_values) do
-      {
-        { space: 'space0', resource_type: 'app', date: '2021-08-02' } => 0.03,
-        { space: 'space0', resource_type: 'service', date: '2021-08-02' } => 0.03,
-        { space: 'space1', resource_type: 'app', date: '2021-08-02' } => 0.1,
-        { space: 'space1', resource_type: 'service', date: '2021-08-02' } => 0.07
-      }
+      <<~COST_METRICS
+        cost{space="space0",resource_type="app",date="2021-08-02"} 0.03
+        cost{space="space0",resource_type="service",date="2021-08-02"} 0.03
+        cost{space="space1",resource_type="app",date="2021-08-02"} 0.1
+        cost{space="space1",resource_type="service",date="2021-08-02"} 0.07
+      COST_METRICS
     end
-    let(:my_instance) { instance_double(MyClass) }
 
     before do
-      allow(ENV).to receive(:fetch).with('PAAS_USERNAME').and_return('username')
-      allow(ENV).to receive(:fetch).with('PAAS_PASSWORD').and_return('password')
       mock_today_date
       mock_api_response
+      allow(described_class).to receive(:paas_token).and_return(FAKE_TOKEN)
     end
 
-    it 'updates the cost metrics' do
-      billing_calculator = described_class.new(nil)
-      billing_calculator.update_cost_metric(token)
-      cost_metrics = billing_calculator.cost
+    context 'when PaaS credentials are set' do
+      before do
+        allow(ENV).to receive(:fetch).with('PAAS_USERNAME').and_return('username')
+        allow(ENV).to receive(:fetch).with('PAAS_PASSWORD').and_return('password')
+      end
 
-      expect(cost_metrics.values).to eq(cost_metrics_values)
-    end
-  end
-
-  context 'when SKIP_LOGIN is set' do
-    before do
-      allow(ENV).to receive(:[]).with('SKIP_LOGIN').and_return('tRuE')
+      include_examples 'successful billing API response'
     end
 
-    it 'does not require paas credentials' do
-      expect{described_class.new(nil)}.not_to raise_error
+    context 'when SKIP_LOGIN is set' do
+      before do
+        allow(ENV).to receive(:[]).with('SKIP_LOGIN').and_return('tRuE')
+      end
+
+      include_examples 'successful billing API response'
     end
   end
 end
