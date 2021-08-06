@@ -7,8 +7,12 @@ test:
 lint:
 	@rubocop --require rubocop-rspec
 
+.PHONY: dev
+dev:
+	$(eval RACKUP_REQUIRE=-rbyebug)
+
 start:
-	@rackup -o 0.0.0.0 -p ${PORT}
+	@rackup -o 0.0.0.0 -p ${PORT} ${RACKUP_REQUIRE}
 
 build:
 	docker buildx build -t ghcr.io/dfe-digital/paas-billing-exporter:${IMAGE_TAG} \

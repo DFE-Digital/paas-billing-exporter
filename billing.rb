@@ -4,7 +4,6 @@
 require 'net/http'
 require 'json'
 require 'prometheus/client'
-require 'byebug'
 
 ORG = 'dfe'
 BILLING_URL = 'https://billing.london.cloud.service.gov.uk'
