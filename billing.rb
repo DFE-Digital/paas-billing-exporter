@@ -55,8 +55,7 @@ class BillingCalculator
   end
 
   def call(env)
-    token = self.class.paas_token.strip
-    self.class.update_cost_metric(token)
+    self.class.update_cost_metric(self.class.paas_token) if env['PATH_INFO'] == '/metrics'
 
     @app.call(env)
   end
@@ -66,7 +65,7 @@ class BillingCalculator
       system "cf api #{API_URL}"
       system "cf auth #{@paas_username} #{@paas_password}"
     end
-    `cf oauth-token`
+    `cf oauth-token`.strip
   end
 
   def self.range_start_yesterday
@@ -136,7 +135,8 @@ class DefaultResponse
   def call(_env)
     status  = 200
     headers = { 'Content-Type' => 'text/html' }
-    body    = ["Prometheus metrics updated. See: <a href='/metrics'>/metrics<a>"]
+    body    = ["PaaS billing prometheus exporter connected to #{BILLING_URL}</br>"] +
+              ["Metrics available at: <a href='/metrics'>/metrics<a>"]
 
     [status, headers, body]
   end
