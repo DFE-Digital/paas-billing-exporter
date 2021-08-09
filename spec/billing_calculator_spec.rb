@@ -37,10 +37,10 @@ RSpec.describe BillingCalculator do
     let(:metrics_response) { get '/metrics' }
     let(:cost_metrics_values) do
       <<~COST_METRICS
-        cost{space="space0",resource_type="app",date="2021-08-02"} 0.03
-        cost{space="space0",resource_type="service",date="2021-08-02"} 0.03
-        cost{space="space1",resource_type="app",date="2021-08-02"} 0.1
-        cost{space="space1",resource_type="service",date="2021-08-02"} 0.07
+        cost{space="space0",resource_type="app"} 0.03
+        cost{space="space0",resource_type="service"} 0.03
+        cost{space="space1",resource_type="app"} 0.1
+        cost{space="space1",resource_type="service"} 0.07
       COST_METRICS
     end
 
@@ -88,6 +88,5 @@ RSpec.describe BillingCalculator do
 
       expect(response.status).to eq 200
     end
-
   end
 end
