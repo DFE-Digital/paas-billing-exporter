@@ -18,6 +18,8 @@ GEM
     puma (5.4.0)
       nio4r (~> 2.0)
     rack (2.2.3)
+    rack-test (1.1.0)
+      rack (>= 1.0, < 3)
     rainbow (3.0.0)
     regexp_parser (2.1.1)
     rexml (3.2.5)
@@ -63,6 +65,7 @@ DEPENDENCIES
   prometheus-client
   puma
   rack
+  rack-test
   rspec
   rubocop
   rubocop-rspec

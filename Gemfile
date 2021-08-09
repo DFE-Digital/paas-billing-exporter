@@ -8,6 +8,7 @@ gem 'rack'
 
 group :development do
   gem 'byebug'
+  gem 'rack-test'
   gem 'rspec'
   gem 'rubocop'
   gem 'rubocop-rspec'

@@ -4,7 +4,6 @@
 require 'net/http'
 require 'json'
 require 'prometheus/client'
-require 'byebug'
 
 ORG = 'dfe'
 BILLING_URL = 'https://billing.london.cloud.service.gov.uk'
@@ -14,9 +13,18 @@ PRECISION = 2
 
 # Rack middleware to fetch billing data from the PaaS billing API and aggregate the data into prometheus metrics
 class BillingCalculator
-  attr_reader :cost
-
   def initialize(app)
+    self.class.init_paas_login
+
+    @app = app
+    Prometheus::Client.registry.gauge(
+      :cost,
+      docstring: 'A counter representing PaaS cost per space and resource type on the previous day',
+      labels: %i[space resource_type date]
+    )
+  end
+
+  def self.init_paas_login
     @skip_login = false
     if ENV['SKIP_LOGIN'] && ENV['SKIP_LOGIN'].downcase == 'true'
       @skip_login = true
@@ -24,52 +32,50 @@ class BillingCalculator
       @paas_username = ENV.fetch('PAAS_USERNAME')
       @paas_password = ENV.fetch('PAAS_PASSWORD')
     end
-
-    @app = app
-    prometheus = Prometheus::Client.registry
-    @cost = prometheus.gauge(
-      :cost,
-      docstring: 'A counter representing PaaS cost per space and resource type on the previous day',
-      labels: %i[space resource_type date]
-    )
   end
 
-  def update_cost_metric(token)
-    yesterday_billing_data = yesterday_billing_data(token, range_start_yesterday, range_stop_today)
-    global_cost = calculate_cost yesterday_billing_data
-    cost_array = metrics(global_cost).sort_by { |c| "#{c[:space]}-#{c[:resource_type]}" }
+  def self.aggregate_cost(token)
+    global_cost = calculate_cost yesterday_billing_data(
+      token, range_start_yesterday, range_stop_today
+    )
+    metrics(global_cost).sort_by { |c| "#{c[:space]}-#{c[:resource_type]}" }
+  end
 
+  def self.update_cost_metric(token)
+    cost_array = aggregate_cost(token)
+
+    cost_metric = Prometheus::Client.registry.get(:cost)
     cost_array.each do |c|
-      cost.set(c[:price], labels: { space: c[:space], resource_type: c[:resource_type], date: range_start_yesterday })
+      cost_metric.set(
+        c[:price],
+        labels: { space: c[:space], resource_type: c[:resource_type], date: range_start_yesterday }
+      )
     end
   end
 
   def call(env)
-    token = paas_token.strip
-    update_cost_metric(token)
+    self.class.update_cost_metric(self.class.paas_token) if env['PATH_INFO'] == '/metrics'
 
     @app.call(env)
   end
 
-  private
-
-  def paas_token
+  def self.paas_token
     unless @skip_login
       system "cf api #{API_URL}"
       system "cf auth #{@paas_username} #{@paas_password}"
     end
-    `cf oauth-token`
+    `cf oauth-token`.strip
   end
 
-  def range_start_yesterday
+  def self.range_start_yesterday
     (Time.now - 60 * 60 * 24).strftime('%Y-%m-%d')
   end
 
-  def range_stop_today
+  def self.range_stop_today
     Time.now.strftime('%Y-%m-%d')
   end
 
-  def prepare_uri(range_start, range_stop)
+  def self.prepare_uri(range_start, range_stop)
     uri = URI("#{BILLING_URL}/billable_events")
     params = {
       range_start: range_start,
@@ -80,7 +86,7 @@ class BillingCalculator
     uri
   end
 
-  def yesterday_billing_data(token, range_start, range_stop)
+  def self.yesterday_billing_data(token, range_start, range_stop)
     uri = prepare_uri(range_start, range_stop)
     req = Net::HTTP::Get.new uri
     req['authorization'] = token
@@ -94,7 +100,7 @@ class BillingCalculator
     JSON.parse(res.body)
   end
 
-  def aggregate_price_details(event)
+  def self.aggregate_price_details(event)
     price = 0
     event['price']['details'].each do |d|
       price += d['inc_vat'].to_f
@@ -102,7 +108,7 @@ class BillingCalculator
     price
   end
 
-  def calculate_cost(billing_data)
+  def self.calculate_cost(billing_data)
     cost = {}
     billing_data.each do |details|
       cost[details['space_name']] ||= {}
@@ -112,7 +118,7 @@ class BillingCalculator
     cost
   end
 
-  def metrics(cost)
+  def self.metrics(cost)
     metrics = []
     cost.each do |space, price_per_type|
       price_per_type.each do |t, price|
@@ -128,7 +134,8 @@ class DefaultResponse
   def call(_env)
     status  = 200
     headers = { 'Content-Type' => 'text/html' }
-    body    = ["Prometheus metrics updated. See: <a href='/metrics'>/metrics<a>"]
+    body    = ["PaaS billing prometheus exporter connected to #{BILLING_URL}</br>"] +
+              ["Metrics available at: <a href='/metrics'>/metrics<a>"]
 
     [status, headers, body]
   end
