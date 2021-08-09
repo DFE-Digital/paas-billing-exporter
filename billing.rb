@@ -20,7 +20,7 @@ class BillingCalculator
     Prometheus::Client.registry.gauge(
       :cost,
       docstring: 'A counter representing PaaS cost per space and resource type on the previous day',
-      labels: %i[space resource_type date]
+      labels: %i[space resource_type]
     )
   end
 
@@ -48,7 +48,7 @@ class BillingCalculator
     cost_array.each do |c|
       cost_metric.set(
         c[:price],
-        labels: { space: c[:space], resource_type: c[:resource_type], date: range_start_yesterday }
+        labels: { space: c[:space], resource_type: c[:resource_type] }
       )
     end
   end
