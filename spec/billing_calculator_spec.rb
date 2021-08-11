@@ -47,7 +47,7 @@ RSpec.describe BillingCalculator do
     before do
       mock_today_date
       mock_api_response
-      allow(described_class).to receive(:paas_token).and_return(FAKE_TOKEN)
+      allow(CFWrapper).to receive(:paas_token).and_return(FAKE_TOKEN)
     end
 
     after do
