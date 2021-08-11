@@ -133,7 +133,7 @@ class CFWrapper
   def self.paas_token
     unless @skip_login
       call_cf "api #{API_URL}"
-      call_cf "auth #{@paas_username} #{@paas_password}"
+      call_cf "auth \"#{@paas_username}\" \"#{@paas_password}\""
     end
     call_cf('oauth-token').strip
   end
