@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches:
-    - master
+    - main
 
 env:
   DOCKER_REPOSITORY: ghcr.io/dfe-digital/paas-billing-exporter
