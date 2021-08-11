@@ -4,6 +4,7 @@
 require 'net/http'
 require 'json'
 require 'prometheus/client'
+require 'English'
 
 ORG = 'dfe'
 BILLING_URL = 'https://billing.london.cloud.service.gov.uk'
@@ -14,24 +15,14 @@ PRECISION = 2
 # Rack middleware to fetch billing data from the PaaS billing API and aggregate the data into prometheus metrics
 class BillingCalculator
   def initialize(app)
-    self.class.init_paas_login
-
+    CFWrapper.init_paas_login
     @app = app
+
     Prometheus::Client.registry.gauge(
       :cost,
       docstring: 'A counter representing PaaS cost per space and resource type on the previous day',
       labels: %i[space resource_type]
     )
-  end
-
-  def self.init_paas_login
-    @skip_login = false
-    if ENV['SKIP_LOGIN'] && ENV['SKIP_LOGIN'].downcase == 'true'
-      @skip_login = true
-    else
-      @paas_username = ENV.fetch('PAAS_USERNAME')
-      @paas_password = ENV.fetch('PAAS_PASSWORD')
-    end
   end
 
   def self.aggregate_cost(token)
@@ -43,7 +34,6 @@ class BillingCalculator
 
   def self.update_cost_metric(token)
     cost_array = aggregate_cost(token)
-
     cost_metric = Prometheus::Client.registry.get(:cost)
     cost_array.each do |c|
       cost_metric.set(
@@ -54,17 +44,9 @@ class BillingCalculator
   end
 
   def call(env)
-    self.class.update_cost_metric(self.class.paas_token) if env['PATH_INFO'] == '/metrics'
+    self.class.update_cost_metric(CFWrapper.paas_token) if env['PATH_INFO'] == '/metrics'
 
     @app.call(env)
-  end
-
-  def self.paas_token
-    unless @skip_login
-      system "cf api #{API_URL}"
-      system "cf auth #{@paas_username} #{@paas_password}"
-    end
-    `cf oauth-token`.strip
   end
 
   def self.range_start_yesterday
@@ -126,6 +108,34 @@ class BillingCalculator
       end
     end
     metrics
+  end
+end
+
+# Wrapper around Cloud Foundry CLI
+class CFWrapper
+  def self.init_paas_login
+    @skip_login = false
+    if ENV['SKIP_LOGIN'] && ENV['SKIP_LOGIN'].downcase == 'true'
+      @skip_login = true
+    else
+      @paas_username = ENV.fetch('PAAS_USERNAME')
+      @paas_password = ENV.fetch('PAAS_PASSWORD')
+    end
+  end
+
+  def self.call_cf(arguments)
+    output = `cf #{arguments} 2>&1`
+    raise SystemCallError.new(output, $CHILD_STATUS.exitstatus) if $CHILD_STATUS.exitstatus != 0
+
+    output
+  end
+
+  def self.paas_token
+    unless @skip_login
+      call_cf "api #{API_URL}"
+      call_cf "auth \"#{@paas_username}\" \"#{@paas_password}\""
+    end
+    call_cf('oauth-token').strip
   end
 end
 

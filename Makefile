@@ -2,10 +2,10 @@ PORT ?= 8080
 IMAGE_TAG ?= latest
 
 test:
-	@rspec -f doc
+	@bundle exec rspec -f doc
 
 lint:
-	@rubocop --require rubocop-rspec
+	@bundle exec rubocop --require rubocop-rspec
 
 .PHONY: dev
 dev:
