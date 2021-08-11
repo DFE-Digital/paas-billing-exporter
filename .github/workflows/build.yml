@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    branches:
+    - master
+
+env:
+  DOCKER_REPOSITORY: ghcr.io/dfe-digital/paas-billing-exporter
+
+jobs:
+  build:
+    name: Test, build, push
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        bundler-cache: true
+
+    - name: Run unit tests
+      run: make test
+
+    - name: Run linting
+      run: make lint
+
+    - name: Set environment variables
+      run: |
+        GIT_REF=${{ github.ref }}
+        GIT_BRANCH=${GIT_REF##*/}
+        COMMIT_SHA=${GITHUB_SHA}
+        echo "GIT_BRANCH=${GIT_BRANCH}" >> $GITHUB_ENV
+        echo "DOCKER_IMAGE_TAG=${GIT_BRANCH}-${COMMIT_SHA}" >> $GITHUB_ENV
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push docker image
+      uses: docker/build-push-action@v2
+      with:
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+        # Cache from image tagged with branch name, may be empty first time branch is pushed
+        # Cache from image tagged with main branch name, always present, maybe less recent
+        cache-from: |
+          ${{ env.DOCKER_REPOSITORY }}:${{ env.GIT_BRANCH }}
+          ${{ env.DOCKER_REPOSITORY }}:main
+        push: true
+        # Tag with branch name for reuse
+        tags: |
+          ${{ env.DOCKER_REPOSITORY }}:${{ env.GIT_BRANCH }}
+          ${{ env.DOCKER_REPOSITORY }}:${{ env.DOCKER_IMAGE_TAG }}
