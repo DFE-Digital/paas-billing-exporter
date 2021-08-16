@@ -78,7 +78,7 @@ class BillingCalculator
     end
 
     raise "Error in request to billing API: #{res.code} #{res.message} #{res.body}" if res.code != '200'
-
+    File.write("logs/#{Time.now.hour}_#{Time.now.min}_api.json", res.body)
     JSON.parse(res.body)
   end
 
@@ -149,4 +149,11 @@ class DefaultResponse
 
     [status, headers, body]
   end
+end
+
+calc = BillingCalculator.new(nil)
+while true
+  puts Time.now
+  File.write("logs/#{Time.now.hour}_#{Time.now.min}_metrics.log", BillingCalculator.aggregate_cost(CFWrapper.paas_token))
+  sleep 3600
 end
