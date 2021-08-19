@@ -11,9 +11,9 @@ RSpec.describe BillingCalculator do
     let(:metrics_response) { get '/metrics' }
     let(:cost_metrics_values) do
       <<~COST_METRICS
-        cost{space="space0",resource_type="app"} 0.03
-        cost{space="space0",resource_type="service"} 0.03
-        cost{space="space1",resource_type="app"} 0.1
+        cost{space="space0",resource_type="app"} 0.04
+        cost{space="space0",resource_type="service"} 0.04
+        cost{space="space1",resource_type="app"} 0.11
         cost{space="space1",resource_type="service"} 0.07
       COST_METRICS
     end

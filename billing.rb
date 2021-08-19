@@ -11,6 +11,7 @@ BILLING_URL = 'https://billing.london.cloud.service.gov.uk'
 ORG_GUID = '386a9502-d9b6-4aba-b3c3-ebe4fa3f963e'
 API_URL = 'https://api.london.cloud.service.gov.uk'
 PRECISION = 2
+SERVICE_CHARGE = 10.0 / 100
 
 # Rack middleware to fetch billing data from the PaaS billing API and aggregate the data into prometheus metrics
 class BillingCalculator
@@ -114,7 +115,10 @@ class BillingCalculator
     metrics = []
     cost.each do |space, price_per_type|
       price_per_type.each do |t, price|
-        metrics << { space: space, resource_type: t, price: price.round(PRECISION) }
+        # The billing API price currently does not include the service charge billed on top of it
+        billed_price = (price * (1 + SERVICE_CHARGE)).round(PRECISION)
+
+        metrics << { space: space, resource_type: t, price: billed_price }
       end
     end
     metrics
