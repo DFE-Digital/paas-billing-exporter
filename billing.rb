@@ -11,6 +11,8 @@ BILLING_URL = 'https://billing.london.cloud.service.gov.uk'
 ORG_GUID = '386a9502-d9b6-4aba-b3c3-ebe4fa3f963e'
 API_URL = 'https://api.london.cloud.service.gov.uk'
 PRECISION = 2
+SERVICE_CHARGE = 10.0 / 100
+BILLING_API_OPENING_HOURS = { open: 8, close: 24 }.freeze
 
 # Rack middleware to fetch billing data from the PaaS billing API and aggregate the data into prometheus metrics
 class BillingCalculator
@@ -43,7 +45,22 @@ class BillingCalculator
     end
   end
 
+  def self.api_closed_response(now)
+    body = ['Error: Billing API unavailable<br/>'] +
+           ["Opening hours are #{BILLING_API_OPENING_HOURS[:open]} "] +
+           ["to #{BILLING_API_OPENING_HOURS[:close]} GMT<br/>"] +
+           ["The time is now #{now}"]
+
+    [500, { 'Content-Type' => 'text/html' }, body]
+  end
+
   def call(env)
+    now = Time.now
+    # The billing API currently returns inconsistent data between 0 and 6 GMT
+    if now.hour < BILLING_API_OPENING_HOURS[:open] || now.hour >= BILLING_API_OPENING_HOURS[:close]
+      return self.class.api_closed_response(now)
+    end
+
     self.class.update_cost_metric(CFWrapper.paas_token) if env['PATH_INFO'] == '/metrics'
 
     @app.call(env)
@@ -82,20 +99,30 @@ class BillingCalculator
     JSON.parse(res.body)
   end
 
+  def self.adjust_price(price_detail)
+    if price_detail['name'] == 'storage' && price_detail['plan_name'].include?('postgres')
+      # Required as the billing API currently returns the fixed monthly price
+      time_delta_seconds = Time.parse(price_detail['stop']) - Time.parse(price_detail['start'])
+      price_detail['inc_vat'].to_f / 31 / (24 * 3600) * time_delta_seconds
+    else
+      price_detail['inc_vat'].to_f
+    end
+  end
+
   def self.aggregate_price_details(event)
     price = 0
     event['price']['details'].each do |d|
-      price += d['inc_vat'].to_f
+      price += adjust_price(d)
     end
     price
   end
 
   def self.calculate_cost(billing_data)
     cost = {}
-    billing_data.each do |details|
-      cost[details['space_name']] ||= {}
-      cost[details['space_name']][details['resource_type']] ||= 0
-      cost[details['space_name']][details['resource_type']] += aggregate_price_details(details)
+    billing_data.each do |event|
+      cost[event['space_name']] ||= {}
+      cost[event['space_name']][event['resource_type']] ||= 0
+      cost[event['space_name']][event['resource_type']] += aggregate_price_details(event)
     end
     cost
   end
@@ -104,7 +131,10 @@ class BillingCalculator
     metrics = []
     cost.each do |space, price_per_type|
       price_per_type.each do |t, price|
-        metrics << { space: space, resource_type: t, price: price.round(PRECISION) }
+        # The billing API price currently does not include the service charge billed on top of it
+        billed_price = (price * (1 + SERVICE_CHARGE)).round(PRECISION)
+
+        metrics << { space: space, resource_type: t, price: billed_price }
       end
     end
     metrics
