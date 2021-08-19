@@ -9,7 +9,6 @@ RSpec.describe BillingCalculator do
   let(:metrics_response) { get '/metrics' }
 
   before do
-    mock_today_date
     allow(CFWrapper).to receive(:paas_token).and_return(FAKE_TOKEN)
     allow(ENV).to receive(:fetch).with('PAAS_USERNAME').and_return('username')
     allow(ENV).to receive(:fetch).with('PAAS_PASSWORD').and_return('password')
@@ -23,45 +22,66 @@ RSpec.describe BillingCalculator do
     end
   end
 
-  context 'when /metrics returns full day postgres data with inflated storage price' do
-    let(:cost_metrics_values) do
-      <<~COST_METRICS
-        cost{space="space0",resource_type="service"} 2.98
-      COST_METRICS
-    end
-
+  context 'when the time is late enough so that API returns correct data' do
     before do
-      mock_api_response('spec/fixtures/billing_api_response_with_postgres_full_day.json')
+      mock_today_date
     end
 
-    include_examples 'successful billing API response'
+    context 'when /metrics returns full day postgres data with inflated storage price' do
+      let(:cost_metrics_values) do
+        <<~COST_METRICS
+          cost{space="space0",resource_type="service"} 2.98
+        COST_METRICS
+      end
+
+      before do
+        mock_api_response('spec/fixtures/billing_api_response_with_postgres_full_day.json')
+      end
+
+      include_examples 'successful billing API response'
+    end
+
+    context 'when /metrics returns partial day postgres data with inflated storage price' do
+      let(:cost_metrics_values) do
+        <<~COST_METRICS
+          cost{space="space0",resource_type="service"} 2.46
+        COST_METRICS
+      end
+
+      before do
+        mock_api_response('spec/fixtures/billing_api_response_with_postgres_partial_day.json')
+      end
+
+      include_examples 'successful billing API response'
+    end
+
+    context 'when /metrics returns high price to show the 10% service charge' do
+      let(:cost_metrics_values) do
+        <<~COST_METRICS
+          cost{space="space0",resource_type="service"} 1100.0
+        COST_METRICS
+      end
+
+      before do
+        mock_api_response('spec/fixtures/billing_api_response_with_high_cost.json')
+      end
+
+      include_examples 'successful billing API response'
+    end
   end
 
-  context 'when /metrics returns partial day postgres data with inflated storage price' do
-    let(:cost_metrics_values) do
-      <<~COST_METRICS
-        cost{space="space0",resource_type="service"} 2.46
-      COST_METRICS
-    end
-
+  context 'when the time is too early for the API to return the correct data' do
     before do
-      mock_api_response('spec/fixtures/billing_api_response_with_postgres_partial_day.json')
+      allow(Time).to receive(:now) { Time.mktime(2021, 8, 3, 3, 0) }
+      mock_api_response('spec/fixtures/billing_api_response.json')
     end
 
-    include_examples 'successful billing API response'
-  end
-
-  context 'when /metrics returns high price to show the 10% service charge' do
-    let(:cost_metrics_values) do
-      <<~COST_METRICS
-        cost{space="space0",resource_type="service"} 1100.0
-      COST_METRICS
+    it 'the request is unsuccessful' do
+      expect(metrics_response.status).to eq 500
     end
 
-    before do
-      mock_api_response('spec/fixtures/billing_api_response_with_high_cost.json')
+    it 'the cost metrics are unavailable' do
+      expect(metrics_response.body).not_to include('cost')
     end
-
-    include_examples 'successful billing API response'
   end
 end

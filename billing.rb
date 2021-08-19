@@ -12,6 +12,7 @@ ORG_GUID = '386a9502-d9b6-4aba-b3c3-ebe4fa3f963e'
 API_URL = 'https://api.london.cloud.service.gov.uk'
 PRECISION = 2
 SERVICE_CHARGE = 10.0 / 100
+BILLING_API_OPENING_HOURS = { open: 8, close: 24 }.freeze
 
 # Rack middleware to fetch billing data from the PaaS billing API and aggregate the data into prometheus metrics
 class BillingCalculator
@@ -44,7 +45,22 @@ class BillingCalculator
     end
   end
 
+  def self.api_closed_response(now)
+    body = ['Error: Billing API unavailable<br/>'] +
+           ["Opening hours are #{BILLING_API_OPENING_HOURS[:open]} "] +
+           ["to #{BILLING_API_OPENING_HOURS[:close]} GMT<br/>"] +
+           ["The time is now #{now}"]
+
+    [500, { 'Content-Type' => 'text/html' }, body]
+  end
+
   def call(env)
+    now = Time.now
+    # The billing API currently returns inconsistent data between 0 and 6 GMT
+    if now.hour < BILLING_API_OPENING_HOURS[:open] || now.hour >= BILLING_API_OPENING_HOURS[:close]
+      return self.class.api_closed_response(now)
+    end
+
     self.class.update_cost_metric(CFWrapper.paas_token) if env['PATH_INFO'] == '/metrics'
 
     @app.call(env)
