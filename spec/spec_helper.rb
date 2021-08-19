@@ -102,4 +102,10 @@ RSpec.configure do |config|
   #   Kernel.srand config.seed
 
   $LOAD_PATH << "#{__dir__}/.."
+
+  # Load helpers and shared examples
+  Dir['./spec/support/**/*.rb'].each { |f| require f }
+
+  # Configure helpers
+  config.include Helpers
 end

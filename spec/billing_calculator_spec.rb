@@ -3,32 +3,6 @@
 require 'billing'
 require 'rack/test'
 
-FAKE_TOKEN = 'bearer eyJhbGciOiJSUzI.eyJqdGkiOiI3Z.SxafJ3STKA2CwOGy50Cwab7wd-twXU'
-BILLING_API_URL = 'https://billing.london.cloud.service.gov.uk/billable_events'
-
-def mock_today_date
-  allow(Time).to receive(:now) { Time.mktime(2021, 8, 3, 15, 0) }
-end
-
-def mock_api_response
-  billing_api_response = File.read('spec/fixtures/billing_api_response.json')
-
-  stub_request(:get, BILLING_API_URL)
-    .with(query: { 'org_guid' => ORG_GUID, 'range_start' => '2021-08-02', 'range_stop' => '2021-08-03' })
-    .with(headers: { 'Authorization' => FAKE_TOKEN })
-    .to_return(body: billing_api_response)
-end
-
-RSpec.shared_examples 'successful billing API response' do
-  it 'the request is successful' do
-    expect(metrics_response.status).to eq 200
-  end
-
-  it 'the cost metrics are available' do
-    expect(metrics_response.body).to include(cost_metrics_values)
-  end
-end
-
 RSpec.describe BillingCalculator do
   include Rack::Test::Methods
   let(:app) { Rack::Builder.parse_file('config.ru').first }
@@ -46,7 +20,7 @@ RSpec.describe BillingCalculator do
 
     before do
       mock_today_date
-      mock_api_response
+      mock_api_response('spec/fixtures/billing_api_response.json')
       allow(CFWrapper).to receive(:paas_token).and_return(FAKE_TOKEN)
     end
 
