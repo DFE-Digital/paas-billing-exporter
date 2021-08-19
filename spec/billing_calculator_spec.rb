@@ -55,6 +55,14 @@ RSpec.describe BillingCalculator do
       allow(ENV).to receive(:[]).with('SKIP_LOGIN').and_return('tRuE')
     end
 
+    after do
+      # The prometheus registry is a global object in the ruby process. It is not recreated for each test
+      # so the metrics must be unregistered after each test
+      Prometheus::Client.registry.metrics.each do |m|
+        Prometheus::Client.registry.unregister(m.name)
+      end
+    end
+
     let(:response) { get '/' }
 
     it 'the request is successful' do

@@ -82,10 +82,20 @@ class BillingCalculator
     JSON.parse(res.body)
   end
 
+  def self.adjust_price(price_detail)
+    if price_detail['name'] == 'storage' && price_detail['plan_name'].include?('postgres')
+      # Required as the billing API currently returns the fixed monthly price
+      time_delta_seconds = Time.parse(price_detail['stop']) - Time.parse(price_detail['start'])
+      price_detail['inc_vat'].to_f / 31 / (24 * 3600) * time_delta_seconds
+    else
+      price_detail['inc_vat'].to_f
+    end
+  end
+
   def self.aggregate_price_details(event)
     price = 0
     event['price']['details'].each do |d|
-      price += d['inc_vat'].to_f
+      price += adjust_price(d)
     end
     price
   end
