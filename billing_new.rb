@@ -7,7 +7,7 @@ require 'prometheus/client'
 require 'English'
 
 ORG = 'dfe'
-BILLING_URL = 'https://billing.london.cloud.service.gov.uk'
+BILLING_URL = 'https://new-billing.london.cloud.service.gov.uk'
 ORG_GUID = '386a9502-d9b6-4aba-b3c3-ebe4fa3f963e'
 API_URL = 'https://api.london.cloud.service.gov.uk'
 PRECISION = 2
@@ -88,7 +88,6 @@ class BillingCalculator
   def self.yesterday_billing_data(token, range_start, range_stop)
     uri = prepare_uri(range_start, range_stop)
     puts uri
-
     req = Net::HTTP::Get.new uri
     req['authorization'] = token
 
@@ -106,7 +105,7 @@ class BillingCalculator
     billing_data.each do |event|
       cost[event['space_name']] ||= {}
       cost[event['space_name']][event['resource_type']] ||= 0
-      cost[event['space_name']][event['resource_type']] += event['price']['inc_vat'].to_f
+      cost[event['space_name']][event['resource_type']] += event['charge_gbp_inc_vat'].to_f
     end
     cost
   end
